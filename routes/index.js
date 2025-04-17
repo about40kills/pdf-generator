@@ -6,17 +6,32 @@ const fs = require('fs');
 const PDFDocument = require('pdfkit');
 const bodyParser = require('body-parser');
 
+// Ensure directories exist
+const imageDir = path.join(__dirname, '..', 'public/images');
+if (!fs.existsSync(imageDir)) {
+  fs.mkdirSync(imageDir, { recursive: true });
+}
+
+const pdfDir = path.join(__dirname, '..', 'public/pdf');
+if (!fs.existsSync(pdfDir)) {
+  fs.mkdirSync(pdfDir, { recursive: true });
+}
+
+
 // Set up multer for file uploads
 const storage = multer.diskStorage({
-  //stores the images in the public/images directory
   destination: (req, file, cb) => {
-    cb(null,'public/images')
+    const destPath = path.join(__dirname, '..', 'public/images');
+    if (!fs.existsSync(destPath)) {
+      fs.mkdirSync(destPath, { recursive: true });
+      console.log('Created images directory');
+    }
+    cb(null, destPath);
   },
-  //sets the filename to the current timestamp + the original name
-  filename: (req, file,cb) => {
-    cb(null, file.fieldname + '-' + Date.now() + '.' + file.mimetype.split('/')[1])
+  filename: (req, file, cb) => {
+    cb(null, file.fieldname + '-' + Date.now() + '.' + file.mimetype.split('/')[1]);
   }
-})
+});
 
 //config for file filtering
 const fileFilter = (req, file, cb) => {
@@ -32,23 +47,22 @@ const fileFilter = (req, file, cb) => {
 //initialize multer with the storage and fileFilter options
 const upload = multer({ storage, fileFilter: fileFilter });
 
+
+
+//upload seection for the images
 router.post('/upload', upload.array('images'), (req, res) => {
-  console.log('Files received:', req.files);
-  const files = req.files; 
-  const imgNames = []; 
-
-  // Loop through the files and get the names
-  for(const file of files){
-    imgNames.push(file.filename);  
-  }
- 
-  // store the names in the session
-  req.session.imagefiles = imgNames; 
-
-  // send the names back to the client 
-  res.redirect('/'); 
-
-})
+    try {
+      console.log('Files received:', req.files);
+      const files = req.files; 
+      const imgNames = files.map(file => file.filename);  
+      req.session.imagefiles = imgNames;
+      res.redirect('/'); 
+    } catch (err) {
+      console.error('Error in /upload:', err);
+      res.status(500).send('Upload failed');
+    }
+  });
+  
 
 router.post('/new', upload.array('images'), (req, res) => {
   console.log('Additional files received:', req.files);
