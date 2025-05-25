@@ -1,69 +1,99 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="description" content="A simple image to PDF generator">
-    <meta name="author" content="Opoku Davis">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=Fira+Code&display=swap">
-    <link rel="shortcut icon" href="https://www.shutterstock.com/image-vector/convert-pdf-jpg-file-vector-260nw-2187157285.jpg" type="image/x-icon">
-    <link rel="stylesheet" href="/stylesheets/style.css">
-    <link rel="stylesheet" href="/stylesheets/index.css">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="description" content="A simple image to PDF generator" />
+    <meta name="author" content="Opoku Davis" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"
+    />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=Fira+Code&display=swap"
+    />
+    <link
+      rel="shortcut icon"
+      href="https://www.shutterstock.com/image-vector/convert-pdf-jpg-file-vector-260nw-2187157285.jpg"
+      type="image/x-icon"
+    />
+    <link rel="stylesheet" href="/stylesheets/style.css" />
+    <link rel="stylesheet" href="/stylesheets/index.css" />
     <title>IMG-PDF generator</title>
-</head>
-<body>
+  </head>
+  <body>
     <main>
-        <header>
-            <h1><a href="/">CONVERT2PDF</a></h1>
-        </header>
-        <article>
-            <p class="title">Convert your PNG and JPG images to PDF</p>
-            <form method="POST" action='/upload' enctype="multipart/form-data">
-                <input type="file" name="images" id="upload-file" accept=".png, .jpg, .jpeg" multiple required>
-                <p class="file-selector"><label for="upload-file">Select Files</label></p>
-                <p id="selected-files"><code></code></p>
-                <p class="submit-container"><input type="submit" value="Convert to PDF"></p>
-            </form>
-        </article>
-        <footer>
-            <p><code>copyright &copy;2025 </code><a href="https://github.com/about40kills" target="_blank" rel="noopener noreferrer"><i class="fa-brands fa-github"></i></a></p>
-        </footer>
+      <header>
+        <h1><a href="/">CONVERT2PDF</a></h1>
+      </header>
+      <article>
+        <p class="title">Convert your PNG and JPG images to PDF</p>
+        <form method="POST" action="/upload" enctype="multipart/form-data">
+          <input
+            type="file"
+            name="images"
+            id="upload-file"
+            accept=".png, .jpg, .jpeg"
+            multiple
+            required
+          />
+          <p class="file-selector">
+            <label for="upload-file">Select Files</label>
+          </p>
+          <p id="selected-files"><code></code></p>
+          <p class="submit-container">
+            <input type="submit" value="Convert to PDF" />
+          </p>
+        </form>
+      </article>
+      <footer>
+        <p>
+          <code>copyright &copy;2025 </code
+          ><a
+            href="https://github.com/about40kills"
+            target="_blank"
+            rel="noopener noreferrer"
+            ><i class="fa-brands fa-github"></i
+          ></a>
+        </p>
+      </footer>
 
-        <script>
-            // This script handles the file input and displays the selected file names
-            // in the <code> element. It also shows the submit button when files are selected
-            const uploadFile = document.getElementById('upload-file');
-            const selectedFiles = document.querySelector('#selected-files code');
-            const selectedFilesContainer = document.getElementById('selected-files');
-            const submitButton = document.querySelector('input[type="submit"]');
+      <script>
+        // This script handles the file input and displays the selected file names
+        // in the <code> element. It also shows the submit button when files are selected
+        const uploadFile = document.getElementById("upload-file");
+        const selectedFiles = document.querySelector("#selected-files code");
+        const selectedFilesContainer =
+          document.getElementById("selected-files");
+        const submitButton = document.querySelector('input[type="submit"]');
 
-            let filenames = '';
-            uploadFile.onchange = function() {
-                filenames = '';
-                if (this.files.length > 0) {
-                    for(let file of this.files){
-                        filenames += file.name + ', ';
-                    }
-                    // Remove trailing comma and space
-                    filenames = filenames.slice(0, -2);
-
-                    // Show selected files with animation
-                    selectedFilesContainer.style.display = 'block';
-                    selectedFilesContainer.classList.add('show');
-                    selectedFiles.textContent = filenames;
-
-                    // Show submit button with animation
-                    submitButton.style.display = 'inline-block';
-                    submitButton.style.opacity = '0';
-                    submitButton.style.transform = 'translateY(10px)';
-                    setTimeout(() => {
-                        submitButton.style.opacity = '1';
-                        submitButton.style.transform = 'translateY(0)';
-                    }, 100);
-                }
+        let filenames = "";
+        uploadFile.onchange = function () {
+          filenames = "";
+          if (this.files.length > 0) {
+            for (let file of this.files) {
+              filenames += file.name + ", ";
             }
-        </script>
+            // Remove trailing comma and space
+            filenames = filenames.slice(0, -2);
+
+            // Show selected files with animation
+            selectedFilesContainer.style.display = "block";
+            selectedFilesContainer.classList.add("show");
+            selectedFiles.textContent = filenames;
+
+            // Show submit button with animation
+            submitButton.style.display = "inline-block";
+            submitButton.style.opacity = "0";
+            submitButton.style.transform = "translateY(10px)";
+            setTimeout(() => {
+              submitButton.style.opacity = "1";
+              submitButton.style.transform = "translateY(0)";
+            }, 100);
+          }
+        };
+      </script>
     </main>
-</body>
+  </body>
 </html>

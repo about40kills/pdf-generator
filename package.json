@@ -7,6 +7,7 @@
     "dev": "nodemon ./bin/www"
   },
   "dependencies": {
+    "axios": "^1.9.0",
     "body-parser": "^2.2.0",
     "cookie-parser": "~1.4.4",
     "debug": "~2.6.9",
@@ -16,6 +17,7 @@
     "jade": "~1.11.0",
     "morgan": "~1.9.1",
     "multer": "^1.4.5-lts.2",
+    "nodemon": "^3.1.10",
     "pdfkit": "^0.17.0",
     "sortablejs": "^1.15.6"
   }

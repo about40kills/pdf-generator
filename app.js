@@ -8,6 +8,7 @@ const session = require('express-session');
 
 const indexRouter = require('./routes/index');
 const usersRouter = require('./routes/users');
+const cvRouter = require('./routes/cv');
 
 const app = express();
 
