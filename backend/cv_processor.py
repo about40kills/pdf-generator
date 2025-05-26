@@ -5,6 +5,8 @@ import spacy
 from PIL import Image
 from typing import Dict, List, Tuple
 import io
+import json
+import os
 
 
 class CVProcessor:
@@ -27,21 +29,54 @@ class CVProcessor:
            'achievements': 15,
        }
 
+       # Create a directory to store text data
+       self.text_data_dir = os.path.join(os.path.dirname(__file__), '..', 'data')
+       if not os.path.exists(self.text_data_dir):
+           os.makedirs(self.text_data_dir)
+
     def preprocess_image(self, image_data: bytes) -> np.ndarray:
-        #convert bytes into numpy array
-        nparr = np.frombuffer(image_data, np.unit8)
+        # Convert bytes to numpy array
+        nparr = np.frombuffer(image_data, np.uint8)
         img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
-        #convert to grayscale
+        # Resize for better OCR
+        height, width = img.shape[:2]
+        img = cv2.resize(img, (width*2, height*2), interpolation=cv2.INTER_CUBIC)
+
+        # Convert to grayscale
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-        #apply adaptive thresholding
+        # Apply adaptive thresholding
         thresh = cv2.adaptiveThreshold(
             gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2
         )
 
-        #denoise using median blur
-        denoised = cv2.fastNlMeansDenoising(thresh)
+        # Less aggressive denoising
+        denoised = cv2.medianBlur(thresh, 3)
+        
+        # Add deskewing
+        try:
+            # Get skew angle
+            coords = np.column_stack(np.where(denoised > 0))
+            angle = cv2.minAreaRect(coords)[-1]
+            if angle < -45:
+                angle = -(90 + angle)
+            else:
+                angle = -angle
+            
+            # Rotate if needed
+            if abs(angle) > 0.5:
+                (h, w) = denoised.shape[:2]
+                center = (w // 2, h // 2)
+                M = cv2.getRotationMatrix2D(center, angle, 1.0)
+                denoised = cv2.warpAffine(denoised, M, (w, h),
+                                     flags=cv2.INTER_CUBIC,
+                                     borderMode=cv2.BORDER_CONSTANT, 
+                                     borderValue=255)
+        except:
+            # Skip deskewing if it fails
+            pass
+        
         return denoised
     
     def extract_text(self, image_data: bytes) -> str:
@@ -95,24 +130,78 @@ class CVProcessor:
                 'score': self.scoring_criteria[section] if section_present else 0
             }
 
-            return {
-                'total_score': score,
-                'max_possible_score': sum(self.scoring_criteria.values()),
-                'sections': section_scores
-            }
+        return {
+            'total_score': score,
+            'max_possible_score': sum(self.scoring_criteria.values()),
+            'sections': section_scores
+       }
         
-        def  process_cv(self, image_data: bytes) -> Dict:
-            #process a cv image and return analysis results
-            text = self.extract_text(image_data)
+    def  process_cv(self, image_data: bytes) -> Dict:
+        #process a cv image and return analysis results
+        text = self.extract_text(image_data)
 
-            #check if it's a cv
-            is_cv = self.is_cv(text)
-            score = self.score_cv(text) if is_cv else None
+        #check if it's a cv
+        is_cv = self.is_cv(text)
+        score = self.score_cv(text) if is_cv else None
 
-            return{
-                'is_cv': is_cv,
-                'text': text,
-                'score': score
-            }
+        return{
+            'is_cv': is_cv,
+            'text': text,
+            'score': score
+        }
+
+    def store_text_data(self, pdf_name: str, page_number: int, text: str):
+        """Store extracted text data for a PDF page"""
+        # Skip storage if text is empty
+        if not text.strip():
+            print(f"No text to store for {pdf_name}, page {page_number}")
+            return
+        
+        data_file = os.path.join(self.text_data_dir, f"{pdf_name}.json")
+        print(f"Storing text at: {data_file}")
+
+        # Load existing data or create new
+        if os.path.exists(data_file):
+            with open(data_file, 'r') as f:
+                data = json.load(f)
+        else:
+            data = {"pages": {}}
+        
+        # Add new page data
+        data["pages"][str(page_number)] = text
+        
+        # Save updated data
+        with open(data_file, 'w') as f:
+            json.dump(data, f)
+
+    def search_text(self, pdf_name: str, query: str) -> List[Dict]:
+        """Search for text in a PDF and return matching pages"""
+        data_file = os.path.join(self.text_data_dir, f"{pdf_name}.json")
+        
+        if not os.path.exists(data_file):
+            return []
+        
+        with open(data_file, 'r') as f:
+            data = json.load(f)
+        
+        results = []
+        query = query.lower()
+        
+        for page_num, text in data["pages"].items():
+            if query in text.lower():
+                # Get some context around the match
+                text_lower = text.lower()
+                start_idx = text_lower.find(query)
+                context_start = max(0, start_idx - 50)
+                context_end = min(len(text), start_idx + len(query) + 50)
+                context = text[context_start:context_end]
+                
+                results.append({
+                    "page": int(page_num),
+                    "context": context,
+                    "match": query
+                })
+        
+        return results
 
 

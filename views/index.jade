@@ -37,6 +37,12 @@ html
           span.loader(style="display: none;") ⏳
       p
         a.download(download, style="display: none;") Download PDF &darr;
+      
+      // Search functionality
+      div.search-container(style="display: none;")
+        input#searchInput(type="text" placeholder="Search in PDF...")
+        button#searchButton Search
+        div#searchResults
     footer
       p 
         code copyright &copy; 2025 
