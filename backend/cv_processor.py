@@ -80,15 +80,21 @@ class CVProcessor:
         return denoised
     
     def extract_text(self, image_data: bytes) -> str:
-        #extract text from the image using OCR
         try:
-            #preprocess the image
+            # Preprocess the image
             processed_image = self.preprocess_image(image_data)
 
-            #perform OCR
-            text = pytesseract.image_to_string(processed_image)
+            # Configure OCR for better results
+            custom_config = r'--oem 3 --psm 6 -l eng'
+            text = pytesseract.image_to_string(processed_image, config=custom_config)
+            
+            # Debug logging
+            print(f"Extracted text length: {len(text)}")
+            print(f"Text sample: {text[:100]}")
+            
             return text
         except Exception as e:
+            print(f"OCR error: {str(e)}")
             raise Exception(f"OCR failed: {str(e)}")
         
 

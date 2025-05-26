@@ -158,7 +158,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!query || !currentPdfName) return;
 
     try {
-      const response = await fetch(`http://localhost:56948/search?pdf_name=${currentPdfName}&query=${encodeURIComponent(query)}`);
+      const backendUrl = window.location.hostname === 'localhost' 
+        ? 'http://localhost:56948' 
+        : 'https://pdf-generator-61cx.onrender.com';
+        
+      const response = await fetch(`${backendUrl}/search?pdf_name=${currentPdfName}&query=${encodeURIComponent(query)}`);
       const data = await response.json();
 
       // Clear previous results
@@ -179,7 +183,7 @@ document.addEventListener('DOMContentLoaded', () => {
           
           resultItem.appendChild(pageNumber);
           resultItem.appendChild(context);
-          searchResults.appendChild(resultItem);
+          searchResults.appendChild(resultItem); // Add this line
         });
       } else {
         searchResults.innerHTML = '<div class="search-result-item">No matches found</div>';
