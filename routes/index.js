@@ -82,40 +82,73 @@ router.post('/new', upload.array('images'), (req, res) => {
   res.redirect('/');
 });
 
-router.post('/pdf', (req, res, next) => {
-  let body = req.body;
+router.post('/pdf', async (req, res, next) => {
+  try {
+    let body = req.body;
 
-  //create a new pdf document
-  let doc = new PDFDocument({size: 'A4', autoFirstPage: false});
-  let pdfName = 'pdf-' + Date.now() + '.pdf'; 
+    //create a new pdf document
+    let doc = new PDFDocument({size: 'A4', autoFirstPage: false});
+    let pdfName = 'pdf-' + Date.now() + '.pdf'; 
 
-  //store the pdf in the temporary directory
-  doc.pipe(fs.createWriteStream(path.join(pdfDir, pdfName)));
- 
-  // Add each image to a new page
-  for(let name of body){
-    doc.addPage();
-    try {
-      doc.image(path.join(imageDir, name), 20, 20, {
-        width: 555.28, 
-        align: 'center', 
-        valign: 'center'
-      });
-    } catch (err) {
-      console.error(`Error adding image ${name} to PDF:`, err);
+    //store the pdf in the temporary directory
+    const writeStream = fs.createWriteStream(path.join(pdfDir, pdfName));
+    doc.pipe(writeStream);
+   
+    // Process each image and add to PDF (without searchable text for now)
+    for(let name of body){
+      doc.addPage();
+      
+      try {
+        const imagePath = path.join(imageDir, name);
+        console.log(`Adding image: ${imagePath}`);
+        
+        // Just add the image - no text layer for now
+        doc.image(imagePath, 20, 20, {
+          width: 555.28, 
+          align: 'center', 
+          valign: 'center'
+        });
+        
+      } catch (err) {
+        console.error(`Error adding image ${name}:`, err);
+      }
     }
-  }
- 
-  // Handle PDF completion
-  doc.on('end', () => {
-    console.log('PDF created successfully:', pdfName);
-  });
+   
+    // Handle PDF completion
+    doc.on('end', () => {
+      console.log('PDF created successfully:', pdfName);
+    });
 
-  // Finalize the PDF
-  doc.end();
+    // Finalize the PDF
+    doc.end();
+    
+    // Wait for the PDF to be fully written
+    await new Promise((resolve, reject) => {
+      writeStream.on('finish', resolve);
+      writeStream.on('error', reject);
+    });
+    
+    // Send the PDF URL to the client after the PDF is created
+    res.send(`/pdf/${pdfName}`);
+    
+  } catch (error) {
+    console.error('Error creating PDF:', error);
+    res.status(500).json({ error: 'Failed to create PDF' });
+  }
+});
+
+// Serve PDF files
+router.get('/pdf/:filename', (req, res) => {
+  const filename = req.params.filename;
+  const pdfPath = path.join(pdfDir, filename);
   
-  // Send the PDF URL to the client after the PDF is created
-  res.send(`/pdf/${pdfName}`);
+  if (fs.existsSync(pdfPath)) {
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+    res.sendFile(pdfPath);
+  } else {
+    res.status(404).send('PDF not found');
+  }
 });
 
 router.get('/reset', (req, res) => {

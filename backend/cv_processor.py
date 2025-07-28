@@ -1,12 +1,10 @@
-import cv2
+import cv2 
 import numpy as np
 import pytesseract
 import spacy
 from PIL import Image
 from typing import Dict, List, Tuple
 import io
-import json
-import os
 
 
 class CVProcessor:
@@ -29,53 +27,60 @@ class CVProcessor:
            'achievements': 15,
        }
 
-       # Create a directory to store text data
-       self.text_data_dir = os.path.join(os.path.dirname(__file__), '..', 'data')
-       if not os.path.exists(self.text_data_dir):
-           os.makedirs(self.text_data_dir)
-
     def preprocess_image(self, image_data: bytes) -> np.ndarray:
         # Convert bytes to numpy array
         nparr = np.frombuffer(image_data, np.uint8)
         img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        
+        if img is None:
+            raise Exception("Could not decode image")
 
-        # Resize for better OCR
+        # Resize for better OCR - scale up small images
         height, width = img.shape[:2]
-        img = cv2.resize(img, (width*2, height*2), interpolation=cv2.INTER_CUBIC)
+        if width < 1000 or height < 1000:
+            scale_factor = max(1000/width, 1000/height, 2.0)
+            new_width = int(width * scale_factor)
+            new_height = int(height * scale_factor)
+            img = cv2.resize(img, (new_width, new_height), interpolation=cv2.INTER_CUBIC)
 
         # Convert to grayscale
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-        # Apply adaptive thresholding
+        # Apply adaptive thresholding for better text contrast
         thresh = cv2.adaptiveThreshold(
             gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2
         )
 
-        # Less aggressive denoising
+        # Morphological operations to clean up the image
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
+        thresh = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel)
+        
+        # Noise reduction
         denoised = cv2.medianBlur(thresh, 3)
         
-        # Add deskewing
+        # Deskewing for better OCR accuracy
         try:
             # Get skew angle
             coords = np.column_stack(np.where(denoised > 0))
-            angle = cv2.minAreaRect(coords)[-1]
-            if angle < -45:
-                angle = -(90 + angle)
-            else:
-                angle = -angle
-            
-            # Rotate if needed
-            if abs(angle) > 0.5:
-                (h, w) = denoised.shape[:2]
-                center = (w // 2, h // 2)
-                M = cv2.getRotationMatrix2D(center, angle, 1.0)
-                denoised = cv2.warpAffine(denoised, M, (w, h),
-                                     flags=cv2.INTER_CUBIC,
-                                     borderMode=cv2.BORDER_CONSTANT, 
-                                     borderValue=255)
-        except:
-            # Skip deskewing if it fails
-            pass
+            if len(coords) > 0:
+                angle = cv2.minAreaRect(coords)[-1]
+                if angle < -45:
+                    angle = -(90 + angle)
+                else:
+                    angle = -angle
+                
+                # Rotate if skew is significant
+                if abs(angle) > 0.5:
+                    (h, w) = denoised.shape[:2]
+                    center = (w // 2, h // 2)
+                    M = cv2.getRotationMatrix2D(center, angle, 1.0)
+                    denoised = cv2.warpAffine(denoised, M, (w, h),
+                                         flags=cv2.INTER_CUBIC,
+                                         borderMode=cv2.BORDER_CONSTANT, 
+                                         borderValue=255)
+        except Exception as e:
+            print(f"Deskewing failed: {e}")
+            # Continue without deskewing
         
         return denoised
     
@@ -84,18 +89,70 @@ class CVProcessor:
             # Preprocess the image
             processed_image = self.preprocess_image(image_data)
 
-            # Configure OCR for better results
-            custom_config = r'--oem 3 --psm 6 -l eng'
-            text = pytesseract.image_to_string(processed_image, config=custom_config)
+            # Multiple OCR configurations for better results
+            configs = [
+                r'--oem 3 --psm 6 -l eng',  # Default config
+                r'--oem 3 --psm 3 -l eng',  # Fully automatic page segmentation
+                r'--oem 3 --psm 1 -l eng',  # Automatic page segmentation with OSD
+                r'--oem 3 --psm 11 -l eng', # Sparse text
+            ]
+            
+            best_text = ""
+            best_confidence = 0
+            
+            for config in configs:
+                try:
+                    # Extract text with confidence scores
+                    text = pytesseract.image_to_string(processed_image, config=config)
+                    
+                    # Get confidence data
+                    data = pytesseract.image_to_data(processed_image, config=config, output_type=pytesseract.Output.DICT)
+                    confidences = [int(conf) for conf in data['conf'] if int(conf) > 0]
+                    avg_confidence = sum(confidences) / len(confidences) if confidences else 0
+                    
+                    # Use the result with highest confidence and reasonable text length
+                    if avg_confidence > best_confidence and len(text.strip()) > 10:
+                        best_text = text
+                        best_confidence = avg_confidence
+                        
+                except Exception as e:
+                    print(f"OCR config failed: {config}, error: {e}")
+                    continue
+            
+            # If no good result, use the first config as fallback
+            if not best_text.strip():
+                best_text = pytesseract.image_to_string(processed_image, config=configs[0])
+            
+            # Clean up the text
+            best_text = self.clean_extracted_text(best_text)
             
             # Debug logging
-            print(f"Extracted text length: {len(text)}")
-            print(f"Text sample: {text[:100]}")
+            print(f"Extracted text length: {len(best_text)}")
+            print(f"Text sample: {best_text[:200]}")
+            print(f"Best confidence: {best_confidence}")
             
-            return text
+            return best_text
         except Exception as e:
             print(f"OCR error: {str(e)}")
             raise Exception(f"OCR failed: {str(e)}")
+        
+    def clean_extracted_text(self, text: str) -> str:
+        """Clean and normalize extracted text"""
+        if not text:
+            return ""
+        
+        # Remove excessive whitespace
+        lines = text.split('\n')
+        cleaned_lines = []
+        
+        for line in lines:
+            line = line.strip()
+            if line:  # Only keep non-empty lines
+                # Remove multiple spaces
+                line = ' '.join(line.split())
+                cleaned_lines.append(line)
+        
+        return '\n'.join(cleaned_lines)
         
 
     def is_cv(self, text: str) -> bool:
@@ -155,59 +212,5 @@ class CVProcessor:
             'text': text,
             'score': score
         }
-
-    def store_text_data(self, pdf_name: str, page_number: int, text: str):
-        """Store extracted text data for a PDF page"""
-        # Skip storage if text is empty
-        if not text.strip():
-            print(f"No text to store for {pdf_name}, page {page_number}")
-            return
-        
-        data_file = os.path.join(self.text_data_dir, f"{pdf_name}.json")
-        print(f"Storing text at: {data_file}")
-
-        # Load existing data or create new
-        if os.path.exists(data_file):
-            with open(data_file, 'r') as f:
-                data = json.load(f)
-        else:
-            data = {"pages": {}}
-        
-        # Add new page data
-        data["pages"][str(page_number)] = text
-        
-        # Save updated data
-        with open(data_file, 'w') as f:
-            json.dump(data, f)
-
-    def search_text(self, pdf_name: str, query: str) -> List[Dict]:
-        """Search for text in a PDF and return matching pages"""
-        data_file = os.path.join(self.text_data_dir, f"{pdf_name}.json")
-        
-        if not os.path.exists(data_file):
-            return []
-        
-        with open(data_file, 'r') as f:
-            data = json.load(f)
-        
-        results = []
-        query = query.lower()
-        
-        for page_num, text in data["pages"].items():
-            if query in text.lower():
-                # Get some context around the match
-                text_lower = text.lower()
-                start_idx = text_lower.find(query)
-                context_start = max(0, start_idx - 50)
-                context_end = min(len(text), start_idx + len(query) + 50)
-                context = text[context_start:context_end]
-                
-                results.append({
-                    "page": int(page_num),
-                    "context": context,
-                    "match": query
-                })
-        
-        return results
 
 
